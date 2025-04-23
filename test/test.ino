@@ -19,11 +19,15 @@
 #define FRONT_LEFT_LED_PIN 11
 #define ON_RIGHT_WALL_DISTANCE 0.17
 #define KP 0.37
-#define KD 5
-#define RIGHT_BASE_SPEED 140
-#define LEFT_BASE_SPEED RIGHT_BASE_SPEED-24
-#define ROTATION_SPEED 130
+#define KD 3
+#define RIGHT_BASE_SPEED 210
+#define LEFT_BASE_SPEED RIGHT_BASE_SPEED-27
+#define ROTATION_SPEED 180
+#define MAX_TURN_SPEED 255
 #define FRONT_CM_DISTANCE_OBSTACLE_AVOIDANCE_THRESHOLD 10
+#define FRONT_ALARM_LED_PIN 13
+#define REAR_ALARM_LED_PIN 2
+#define ALARM_COUNTER_THRESHOLD 10
 
 #define TRIGGER_PORT 7
 #define ECHO_PORT 8 
@@ -37,6 +41,12 @@ struct Distance {
 unsigned short previousMillis = 0;  // Salva il tempo dell'iterazione precedente
 unsigned short currentMillis = 0;   // Salva il tempo corrente
 short int previousError = 0;
+short int currentRightBaseSpeed = RIGHT_BASE_SPEED;
+short int currentLeftBaseSpeed = LEFT_BASE_SPEED;
+short int previousRearDistance = 8191;
+short int previousFrontDistance = 8191;
+short int frontAlarmCounter = 0;
+short int rearAlarmCounter = 0;
 
 // objects for the vl53l0x
 Adafruit_VL53L0X lox1 = Adafruit_VL53L0X();
@@ -142,6 +152,13 @@ void setup() {
   Serial.println(F("Starting..."));
   setID();
 
+  pinMode(FRONT_ALARM_LED_PIN, OUTPUT);
+  pinMode(REAR_ALARM_LED_PIN, OUTPUT);
+  digitalWrite(FRONT_ALARM_LED_PIN,HIGH);
+  digitalWrite(REAR_ALARM_LED_PIN,HIGH);
+  delay(1000);
+  digitalWrite(FRONT_ALARM_LED_PIN,LOW);
+  digitalWrite(REAR_ALARM_LED_PIN,LOW);
   pinMode(MOTOR_DX_IN1, OUTPUT);
   pinMode(MOTOR_DX_IN2, OUTPUT);
   pinMode(MOTOR_SX_IN1, OUTPUT);
@@ -234,10 +251,17 @@ bool checkFrontObstacle(){
 
 void rotateLeft(){
   // Ruota in senso orario
-  analogWrite(MOTOR_DX_IN1, ROTATION_SPEED);
+  analogWrite(MOTOR_DX_IN1, ROTATION_SPEED+24);
   analogWrite(MOTOR_DX_IN2, 0);
   analogWrite(MOTOR_SX_IN1, 0);
   analogWrite(MOTOR_SX_IN2, ROTATION_SPEED);
+}
+void turnRight(){
+  // Ruota in senso orario
+  analogWrite(MOTOR_DX_IN1, 0);
+  analogWrite(MOTOR_DX_IN2, 0);
+  analogWrite(MOTOR_SX_IN1, MAX_TURN_SPEED);
+  analogWrite(MOTOR_SX_IN2, 0);
 }
 
 short int frontDistance(){
@@ -266,6 +290,16 @@ void loop() {
   currentMillis = millis();
   double elapsedTime = (currentMillis - previousMillis)*0.001;
   Distance d = read_dual_sensors();
+  
+  if (previousFrontDistance == d.front) frontAlarmCounter++;
+  else                                  frontAlarmCounter = 0;
+  
+  if (previousRearDistance == d.rear)   rearAlarmCounter++;
+  else                                  rearAlarmCounter = 0;
+
+  if (frontAlarmCounter > ALARM_COUNTER_THRESHOLD) digitalWrite(FRONT_ALARM_LED_PIN,HIGH);
+  if (rearAlarmCounter > ALARM_COUNTER_THRESHOLD) digitalWrite(REAR_ALARM_LED_PIN,HIGH);
+  
   short int error = d.rear-d.front;
   //Serial.print("Error:");
   //Serial.print(error);
@@ -275,14 +309,17 @@ void loop() {
   bool frontObstacle = checkFrontObstacle();
   //Serial.print(" FRONT_OBSTACLE ");
   //Serial.print(frontObstacle);
-  if (d.front<100 && d.rear<155){
+  if (d.front<120 && d.rear<125){
     emergency_flag = true;
   }
-  if (frontObstacle){
+
+  // NAVIGATION
+  if       (frontObstacle){
     rotateLeft();
-  }
-  else if (d.front>300 && d.rear>300){
+  }else if (d.front>500 && d.rear>500){
     moveForward();
+  }else if (d.front>300 && d.rear<200){
+    turnRight();
   }else{
     moveForwardWithFeedback(error, emergency_flag, error-previousError);
   }
