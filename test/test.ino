@@ -17,10 +17,10 @@
 #define MOTOR_SX_IN2 10
 //#define FRONT_RIGHT_LED_PIN 12
 #define FRONT_LEFT_LED_PIN 13
-#define ON_RIGHT_WALL_DISTANCE 0.12
+#define ON_RIGHT_WALL_DISTANCE 0.125
 #define KP 0.37
 #define KD 4
-#define RIGHT_BASE_SPEED 160
+#define RIGHT_BASE_SPEED 150
 #define LEFT_BASE_SPEED RIGHT_BASE_SPEED-30
 #define ROTATION_SPEED 120
 #define MAX_TURN_SPEED 150
@@ -181,12 +181,12 @@ void setup() {
 }
 
  
-void moveForwardWithFeedback(short int pwm, bool emergency_flag, short int error_dot){
+void moveForwardWithFeedback(short int pwm, bool emergencyFlagFeedback, short int error_dot){
     short int proportional_feedback = pwm*KP;
     short int derivative_feedback = error_dot*KD;
     short int r_speed = constrain(RIGHT_BASE_SPEED+proportional_feedback+derivative_feedback,0,255);
     short int l_speed = constrain(LEFT_BASE_SPEED-proportional_feedback-derivative_feedback,0,255);
-    if (emergency_flag){
+    if (emergencyFlagFeedback){
       l_speed=l_speed/2;
     }
     Serial.print(" FEEDBACK R_PWM:");
@@ -343,17 +343,21 @@ void loop() {
     //Serial.print("Error:");
     //Serial.print(error);
     Serial.println();
-    bool emergency_flag = false;
+    bool emergencyFlagFeedback = false;
+    bool emergencyFlagRotation = false;
 
     bool frontObstacle = checkFrontObstacle();
     //Serial.print(" FRONT_OBSTACLE ");
     //Serial.print(frontObstacle);
-    if (d.front<90 && d.rear<100){
-      emergency_flag = true;
+    if (d.front<85 || (d.front<90 && d.rear<100)){
+      emergencyFlagFeedback = true;
+    }
+    if (d.front<80) {
+      emergencyFlagRotation = true;
     }
 
     // NAVIGATION
-    if       (frontObstacle){
+    if       (frontObstacle || emergencyFlagRotation){
       digitalWrite(ROTATE_LEFT_LED_PIN,HIGH);
       digitalWrite(TURN_RIGHT_LED_PIN,LOW);
       digitalWrite(MOVE_FORWARD_LED_PIN,LOW);
@@ -376,7 +380,7 @@ void loop() {
       digitalWrite(ROTATE_LEFT_LED_PIN,HIGH);
       digitalWrite(TURN_RIGHT_LED_PIN,HIGH);
       digitalWrite(MOVE_FORWARD_LED_PIN,HIGH);
-      moveForwardWithFeedback(error, emergency_flag, error-previousError);
+      moveForwardWithFeedback(error, emergencyFlagFeedback, error-previousError);
       lastState = 3;
     }
     //delay(10);
