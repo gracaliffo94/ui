@@ -5,7 +5,7 @@
 #define LOX2_ADDRESS 0x31
 
 // set the pins to shutdown
-#define SHT_LOX1 3
+#define SHT_LOX1 2
 #define SHT_LOX2 4
 
 
@@ -15,23 +15,31 @@
 #define MOTOR_DX_IN2 6
 #define MOTOR_SX_IN1 9
 #define MOTOR_SX_IN2 10
-#define FRONT_RIGHT_LED_PIN 12
-#define FRONT_LEFT_LED_PIN 11
-#define ON_RIGHT_WALL_DISTANCE 0.17
+//#define FRONT_RIGHT_LED_PIN 12
+#define FRONT_LEFT_LED_PIN 13
+#define ON_RIGHT_WALL_DISTANCE 0.12
 #define KP 0.37
-#define KD 3
-#define RIGHT_BASE_SPEED 210
-#define LEFT_BASE_SPEED RIGHT_BASE_SPEED-27
-#define ROTATION_SPEED 180
-#define MAX_TURN_SPEED 255
-#define FRONT_CM_DISTANCE_OBSTACLE_AVOIDANCE_THRESHOLD 10
-#define FRONT_ALARM_LED_PIN 13
-#define REAR_ALARM_LED_PIN 2
+#define KD 4
+#define RIGHT_BASE_SPEED 160
+#define LEFT_BASE_SPEED RIGHT_BASE_SPEED-30
+#define ROTATION_SPEED 120
+#define MAX_TURN_SPEED 150
+#define FRONT_CM_DISTANCE_OBSTACLE_AVOIDANCE_THRESHOLD 15
 #define ALARM_COUNTER_THRESHOLD 10
-
+#define SEARCH_ROTATION_SPEED 115
 #define TRIGGER_PORT 7
 #define ECHO_PORT 8 
- 
+
+#define REAR_ALARM_LED_PIN 3
+#define FRONT_ALARM_LED_PIN 11
+#define WALL_FOUND_LED_PIN 12
+
+#define ROTATE_LEFT_LED_PIN 3
+#define TURN_RIGHT_LED_PIN 11
+#define MOVE_FORWARD_LED_PIN 12
+
+
+
 struct Distance {
     short int front;
     short int rear;
@@ -47,7 +55,8 @@ short int previousRearDistance = 8191;
 short int previousFrontDistance = 8191;
 short int frontAlarmCounter = 0;
 short int rearAlarmCounter = 0;
-
+bool wallFound = false;
+short int lastState = 0;
 // objects for the vl53l0x
 Adafruit_VL53L0X lox1 = Adafruit_VL53L0X();
 Adafruit_VL53L0X lox2 = Adafruit_VL53L0X();
@@ -101,30 +110,29 @@ Distance read_dual_sensors() {
   lox1.rangingTest(&measure1, false); // pass in 'true' to get debug data printout!
   lox2.rangingTest(&measure2, false); // pass in 'true' to get debug data printout!
 
-  // print sensor one reading
-  Serial.print(F("Front: "));
   if(measure2.RangeStatus != 4) {     // if not out of range
     d.front = measure2.RangeMilliMeter;
-    Serial.print(d.front);
   } else {
-    Serial.print(F("Out of range"));
+    d.front = 2000;
   }
 
 
-  Serial.print(F(" "));
 
-  // print sensor two reading
-  Serial.print(F("Rear: "));
   if(measure1.RangeStatus != 4) {
     d.rear = measure1.RangeMilliMeter;
-    Serial.print(d.rear);
   } else {
-    Serial.print(F("Out of range"));
+    d.rear = 2000;
   }
   
+  d.front = constrain(d.front,0,2000);
+  d.rear = constrain(d.rear,0,2000);
 
-  
-  Serial.println();
+  Serial.print(F("Front: "));
+  Serial.print(d.front);
+  Serial.print(F(" "));
+  Serial.print(F("Rear: "));
+  Serial.print(d.rear);
+
   return d;
 }
 
@@ -154,9 +162,12 @@ void setup() {
 
   pinMode(FRONT_ALARM_LED_PIN, OUTPUT);
   pinMode(REAR_ALARM_LED_PIN, OUTPUT);
+  pinMode(WALL_FOUND_LED_PIN, OUTPUT);
+  digitalWrite(WALL_FOUND_LED_PIN,HIGH);
   digitalWrite(FRONT_ALARM_LED_PIN,HIGH);
   digitalWrite(REAR_ALARM_LED_PIN,HIGH);
   delay(1000);
+  digitalWrite(WALL_FOUND_LED_PIN,LOW);
   digitalWrite(FRONT_ALARM_LED_PIN,LOW);
   digitalWrite(REAR_ALARM_LED_PIN,LOW);
   pinMode(MOTOR_DX_IN1, OUTPUT);
@@ -164,39 +175,10 @@ void setup() {
   pinMode(MOTOR_SX_IN1, OUTPUT);
   pinMode(MOTOR_SX_IN2, OUTPUT);
   pinMode(FRONT_LEFT_LED_PIN, INPUT);
-  pinMode(FRONT_RIGHT_LED_PIN, INPUT);
+  //pinMode(FRONT_RIGHT_LED_PIN, INPUT);
+  
  
 }
-
-Distance getDistance() {
-  Distance d;
-  VL53L0X_RangingMeasurementData_t measure1;
-  //Serial.print("Reading a measurement...1 ");
-  lox1.rangingTest(&measure1, false); // pass in 'true' to get debug data printout!
-  if (measure1.RangeStatus != 4) {  // phase failures have incorrect data
-    //Serial.print("Distance (mm): "); Serial.println(measure1.RangeMilliMeter);
-    d.rear = measure1.RangeMilliMeter*0.001;
-  } else {
-    //Serial.println(" out of range ");
-    d.rear = 2000;
-  }
- 
-  delay(10);
- 
-  VL53L0X_RangingMeasurementData_t measure2;
-  //Serial.print("Reading a measurement...2 ");
-  lox2.rangingTest(&measure2, false); // pass in 'true' to get debug data printout!
-  if (measure2.RangeStatus != 4) {  // phase failures have incorrect data
-    //Serial.print("Distance (mm): "); Serial.println(measure2.RangeMilliMeter);
-    d.front = measure2.RangeMilliMeter*0.001;
-  } else {
-    //Serial.println(" out of range ");
-    d.front = 2000;
-  }
-  delay(10);
- 
-  return d;
-} 
 
  
 void moveForwardWithFeedback(short int pwm, bool emergency_flag, short int error_dot){
@@ -245,22 +227,46 @@ bool checkFrontObstacle(){
   if (frontDistance()<FRONT_CM_DISTANCE_OBSTACLE_AVOIDANCE_THRESHOLD)
     return true;
   bool left_obstacle = 1-digitalRead(FRONT_LEFT_LED_PIN);
-  bool right_obstacle = 1-digitalRead(FRONT_RIGHT_LED_PIN);
-  return left_obstacle || right_obstacle;
+  //bool right_obstacle = 1-digitalRead(FRONT_RIGHT_LED_PIN);
+  return left_obstacle;// || right_obstacle;
 }
 
-void rotateLeft(){
+void rotateLeft(short int speed){
   // Ruota in senso orario
-  analogWrite(MOTOR_DX_IN1, ROTATION_SPEED+24);
+  analogWrite(MOTOR_DX_IN1, speed+18);
   analogWrite(MOTOR_DX_IN2, 0);
   analogWrite(MOTOR_SX_IN1, 0);
-  analogWrite(MOTOR_SX_IN2, ROTATION_SPEED);
+  analogWrite(MOTOR_SX_IN2, speed);
 }
-void turnRight(){
+
+void rotateRight(short int speed){
+  // Ruota in senso orario
+  analogWrite(MOTOR_DX_IN1, 0);
+  analogWrite(MOTOR_DX_IN2, speed+18);
+  analogWrite(MOTOR_SX_IN1, speed);
+  analogWrite(MOTOR_SX_IN2, 0);
+}
+void rotate90CW(){
+  // Ruota in senso orario
+  analogWrite(MOTOR_DX_IN1, 0);
+  analogWrite(MOTOR_DX_IN2, 148);
+  analogWrite(MOTOR_SX_IN1, 120);
+  analogWrite(MOTOR_SX_IN2, 0);
+  delay(150);
+}
+void turnRight(int motionTime){
   // Ruota in senso orario
   analogWrite(MOTOR_DX_IN1, 0);
   analogWrite(MOTOR_DX_IN2, 0);
   analogWrite(MOTOR_SX_IN1, MAX_TURN_SPEED);
+  analogWrite(MOTOR_SX_IN2, 0);
+  delay(motionTime);
+}
+void stopMotors(){
+  // Ruota in senso orario
+  analogWrite(MOTOR_DX_IN1, 0);
+  analogWrite(MOTOR_DX_IN2, 0);
+  analogWrite(MOTOR_SX_IN1, 0);
   analogWrite(MOTOR_SX_IN2, 0);
 }
 
@@ -286,43 +292,95 @@ short int frontDistance(){
   return r;
 }
 
-void loop() {
-  currentMillis = millis();
-  double elapsedTime = (currentMillis - previousMillis)*0.001;
-  Distance d = read_dual_sensors();
-  
+void searchForWall(Distance d, short int diff){
+  digitalWrite(WALL_FOUND_LED_PIN, LOW);
+  rotateLeft(SEARCH_ROTATION_SPEED);
+  if ((d.front<1000 && d.rear<1000) && (diff>-25 && diff<25)){
+    digitalWrite(WALL_FOUND_LED_PIN, HIGH);
+    rotate90CW();
+    wallFound = true;
+  }
+}
+
+void validateSensorData(Distance d){
   if (previousFrontDistance == d.front) frontAlarmCounter++;
   else                                  frontAlarmCounter = 0;
   
   if (previousRearDistance == d.rear)   rearAlarmCounter++;
   else                                  rearAlarmCounter = 0;
 
-  if (frontAlarmCounter > ALARM_COUNTER_THRESHOLD) digitalWrite(FRONT_ALARM_LED_PIN,HIGH);
-  if (rearAlarmCounter > ALARM_COUNTER_THRESHOLD) digitalWrite(REAR_ALARM_LED_PIN,HIGH);
-  
+  if (frontAlarmCounter > ALARM_COUNTER_THRESHOLD) exit(0);//digitalWrite(FRONT_ALARM_LED_PIN,HIGH);
+  if (rearAlarmCounter > ALARM_COUNTER_THRESHOLD) exit(0);//digitalWrite(REAR_ALARM_LED_PIN,HIGH);
+
+  previousFrontDistance = d.front;
+  previousRearDistance = d.rear;
+}
+
+void visualDebugTof(Distance d){
+  short int frontLedPwm = constrain(((d.front-100.0)/200.0)*255,0,255);
+  short int rearLedPwm = constrain(((d.rear-100.0)/200.0)*255,0,255);
+  Serial.print("front pwm ");
+  Serial.print(frontLedPwm);
+  Serial.print("rear pwm ");
+  Serial.print(rearLedPwm);
+  analogWrite(FRONT_ALARM_LED_PIN,frontLedPwm);
+  analogWrite(REAR_ALARM_LED_PIN,rearLedPwm);
+}
+
+void loop() {
+  currentMillis = millis();
+  double elapsedTime = (currentMillis - previousMillis)*0.001;
+
+  Distance d = read_dual_sensors();
+  //validateSensorData(d);
+  //visualDebugTof(d);
   short int error = d.rear-d.front;
-  //Serial.print("Error:");
-  //Serial.print(error);
-  Serial.println();
-  bool emergency_flag = false;
 
-  bool frontObstacle = checkFrontObstacle();
-  //Serial.print(" FRONT_OBSTACLE ");
-  //Serial.print(frontObstacle);
-  if (d.front<120 && d.rear<125){
-    emergency_flag = true;
-  }
+  //if (!wallFound){
+  //  searchForWall(d,error);
+  //}else{
+    
+    //Serial.print("Error:");
+    //Serial.print(error);
+    Serial.println();
+    bool emergency_flag = false;
 
-  // NAVIGATION
-  if       (frontObstacle){
-    rotateLeft();
-  }else if (d.front>500 && d.rear>500){
-    moveForward();
-  }else if (d.front>300 && d.rear<200){
-    turnRight();
-  }else{
-    moveForwardWithFeedback(error, emergency_flag, error-previousError);
-  }
-  //delay(10);
-  previousError = error;
+    bool frontObstacle = checkFrontObstacle();
+    //Serial.print(" FRONT_OBSTACLE ");
+    //Serial.print(frontObstacle);
+    if (d.front<90 && d.rear<100){
+      emergency_flag = true;
+    }
+
+    // NAVIGATION
+    if       (frontObstacle){
+      digitalWrite(ROTATE_LEFT_LED_PIN,HIGH);
+      digitalWrite(TURN_RIGHT_LED_PIN,LOW);
+      digitalWrite(MOVE_FORWARD_LED_PIN,LOW);
+      rotateLeft(ROTATION_SPEED);
+      lastState = 0;
+    }else if (d.front>300 && d.rear>300){
+      digitalWrite(ROTATE_LEFT_LED_PIN,LOW);
+      digitalWrite(TURN_RIGHT_LED_PIN,LOW);
+      digitalWrite(MOVE_FORWARD_LED_PIN,HIGH);
+      if (lastState == 3) rotateRight(ROTATION_SPEED);
+      else moveForward();
+      lastState = 1;
+    }else if (d.front>200 && d.rear<150){
+      digitalWrite(ROTATE_LEFT_LED_PIN,LOW);
+      digitalWrite(TURN_RIGHT_LED_PIN,HIGH);
+      digitalWrite(MOVE_FORWARD_LED_PIN,LOW);
+      turnRight(300);
+      lastState = 2;
+    }else{
+      digitalWrite(ROTATE_LEFT_LED_PIN,HIGH);
+      digitalWrite(TURN_RIGHT_LED_PIN,HIGH);
+      digitalWrite(MOVE_FORWARD_LED_PIN,HIGH);
+      moveForwardWithFeedback(error, emergency_flag, error-previousError);
+      lastState = 3;
+    }
+    //delay(10);
+    previousError = error;
+  //}
+  Serial.println("");
 }
