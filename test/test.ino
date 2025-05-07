@@ -20,9 +20,9 @@
 #define ON_RIGHT_WALL_DISTANCE 0.125
 #define KP 0.37
 #define KD 4
-#define RIGHT_BASE_SPEED 150
+#define RIGHT_BASE_SPEED 155
 #define LEFT_BASE_SPEED RIGHT_BASE_SPEED-30
-#define ROTATION_SPEED 120
+#define ROTATION_SPEED 150
 #define MAX_TURN_SPEED 150
 #define FRONT_CM_DISTANCE_OBSTACLE_AVOIDANCE_THRESHOLD 15
 #define ALARM_COUNTER_THRESHOLD 10
@@ -30,15 +30,11 @@
 #define TRIGGER_PORT 7
 #define ECHO_PORT 8 
 
-#define REAR_ALARM_LED_PIN 3
-#define FRONT_ALARM_LED_PIN 11
-#define WALL_FOUND_LED_PIN 12
+#define LIGHT_SENSOR_2 3
+#define STATE_LIGHT_FOUND_LED_PIN 11
 
-#define ROTATE_LEFT_LED_PIN 3
-#define TURN_RIGHT_LED_PIN 11
-#define MOVE_FORWARD_LED_PIN 12
-
-
+#define LIGHT_SENSOR_1 12
+#define IGNORE_TIME_AFTER_LIGHT_FOUND 1000
 
 struct Distance {
     short int front;
@@ -46,8 +42,7 @@ struct Distance {
 };
 
 
-unsigned short previousMillis = 0;  // Salva il tempo dell'iterazione precedente
-unsigned short currentMillis = 0;   // Salva il tempo corrente
+//unsigned short previousMillis = 0;  // Salva il tempo dell'iterazione precedente
 short int previousError = 0;
 short int currentRightBaseSpeed = RIGHT_BASE_SPEED;
 short int currentLeftBaseSpeed = LEFT_BASE_SPEED;
@@ -56,8 +51,11 @@ short int previousFrontDistance = 8191;
 short int frontAlarmCounter = 0;
 short int rearAlarmCounter = 0;
 bool wallFound = false;
+bool first_light_not_found = true;
 short int lastState = 0;
+unsigned long lastTimeLightFound = millis();
 // objects for the vl53l0x
+
 Adafruit_VL53L0X lox1 = Adafruit_VL53L0X();
 Adafruit_VL53L0X lox2 = Adafruit_VL53L0X();
 
@@ -160,21 +158,17 @@ void setup() {
   Serial.println(F("Starting..."));
   setID();
 
-  pinMode(FRONT_ALARM_LED_PIN, OUTPUT);
-  pinMode(REAR_ALARM_LED_PIN, OUTPUT);
-  pinMode(WALL_FOUND_LED_PIN, OUTPUT);
-  digitalWrite(WALL_FOUND_LED_PIN,HIGH);
-  digitalWrite(FRONT_ALARM_LED_PIN,HIGH);
-  digitalWrite(REAR_ALARM_LED_PIN,HIGH);
-  delay(1000);
-  digitalWrite(WALL_FOUND_LED_PIN,LOW);
-  digitalWrite(FRONT_ALARM_LED_PIN,LOW);
-  digitalWrite(REAR_ALARM_LED_PIN,LOW);
+  pinMode(STATE_LIGHT_FOUND_LED_PIN, OUTPUT);
+  digitalWrite(STATE_LIGHT_FOUND_LED_PIN,HIGH);
+  delay(300);
+  digitalWrite(STATE_LIGHT_FOUND_LED_PIN,LOW);
   pinMode(MOTOR_DX_IN1, OUTPUT);
   pinMode(MOTOR_DX_IN2, OUTPUT);
   pinMode(MOTOR_SX_IN1, OUTPUT);
   pinMode(MOTOR_SX_IN2, OUTPUT);
   pinMode(FRONT_LEFT_LED_PIN, INPUT);
+  pinMode(LIGHT_SENSOR_1,INPUT);
+  pinMode(LIGHT_SENSOR_2,INPUT);
   //pinMode(FRONT_RIGHT_LED_PIN, INPUT);
   
  
@@ -222,6 +216,11 @@ void moveForward(){
   Serial.println("");
 }
 
+bool checkLight(){
+  bool light_sensor_1 = digitalRead(LIGHT_SENSOR_1);
+  bool light_sensor_2 = digitalRead(LIGHT_SENSOR_2);
+  return light_sensor_1 || light_sensor_2;
+}
 
 bool checkFrontObstacle(){
   if (frontDistance()<FRONT_CM_DISTANCE_OBSTACLE_AVOIDANCE_THRESHOLD)
@@ -279,69 +278,32 @@ short int frontDistance(){
   digitalWrite( ECHO_PORT, LOW );
   long duration = pulseIn( ECHO_PORT, HIGH );
   long r = 0.034 * duration / 2;
-  /*Serial.print( "durata: " );
-  Serial.print( duration );
-  Serial.print( " , " );
-  Serial.print( "distanza: " );
-  if( duration > 38000 ) 
-    Serial.println( "fuori portata");
-  else{ 
-    Serial.print( r ); Serial.println( "cm" );
-  }*/
-  //delay(10);
   return r;
 }
 
 void searchForWall(Distance d, short int diff){
-  digitalWrite(WALL_FOUND_LED_PIN, LOW);
   rotateLeft(SEARCH_ROTATION_SPEED);
   if ((d.front<1000 && d.rear<1000) && (diff>-25 && diff<25)){
-    digitalWrite(WALL_FOUND_LED_PIN, HIGH);
     rotate90CW();
     wallFound = true;
   }
 }
 
-void validateSensorData(Distance d){
-  if (previousFrontDistance == d.front) frontAlarmCounter++;
-  else                                  frontAlarmCounter = 0;
-  
-  if (previousRearDistance == d.rear)   rearAlarmCounter++;
-  else                                  rearAlarmCounter = 0;
 
-  if (frontAlarmCounter > ALARM_COUNTER_THRESHOLD) exit(0);//digitalWrite(FRONT_ALARM_LED_PIN,HIGH);
-  if (rearAlarmCounter > ALARM_COUNTER_THRESHOLD) exit(0);//digitalWrite(REAR_ALARM_LED_PIN,HIGH);
-
-  previousFrontDistance = d.front;
-  previousRearDistance = d.rear;
-}
-
-void visualDebugTof(Distance d){
-  short int frontLedPwm = constrain(((d.front-100.0)/200.0)*255,0,255);
-  short int rearLedPwm = constrain(((d.rear-100.0)/200.0)*255,0,255);
-  Serial.print("front pwm ");
-  Serial.print(frontLedPwm);
-  Serial.print("rear pwm ");
-  Serial.print(rearLedPwm);
-  analogWrite(FRONT_ALARM_LED_PIN,frontLedPwm);
-  analogWrite(REAR_ALARM_LED_PIN,rearLedPwm);
+void greenLedThreeSecondsBlocking(){
+  digitalWrite(STATE_LIGHT_FOUND_LED_PIN,HIGH);
+  delay(3000);
+  digitalWrite(STATE_LIGHT_FOUND_LED_PIN,LOW);
 }
 
 void loop() {
-  currentMillis = millis();
-  double elapsedTime = (currentMillis - previousMillis)*0.001;
 
   Distance d = read_dual_sensors();
-  //validateSensorData(d);
-  //visualDebugTof(d);
   short int error = d.rear-d.front;
 
   //if (!wallFound){
   //  searchForWall(d,error);
   //}else{
-    
-    //Serial.print("Error:");
-    //Serial.print(error);
     Serial.println();
     bool emergencyFlagFeedback = false;
     bool emergencyFlagRotation = false;
@@ -355,31 +317,22 @@ void loop() {
     if (d.front<80) {
       emergencyFlagRotation = true;
     }
-
-    // NAVIGATION
-    if       (frontObstacle || emergencyFlagRotation){
-      digitalWrite(ROTATE_LEFT_LED_PIN,HIGH);
-      digitalWrite(TURN_RIGHT_LED_PIN,LOW);
-      digitalWrite(MOVE_FORWARD_LED_PIN,LOW);
+    if(checkLight() && (millis()-lastTimeLightFound>IGNORE_TIME_AFTER_LIGHT_FOUND || first_light_not_found)){
+      first_light_not_found = false;
+      stopMotors(); // Ferma il robot
+      greenLedThreeSecondsBlocking(); // Accendi verde per 3 secondi 
+      lastTimeLightFound = millis();
+    } else if (frontObstacle || emergencyFlagRotation){
       rotateLeft(ROTATION_SPEED);
       lastState = 0;
     }else if (d.front>300 && d.rear>300){
-      digitalWrite(ROTATE_LEFT_LED_PIN,LOW);
-      digitalWrite(TURN_RIGHT_LED_PIN,LOW);
-      digitalWrite(MOVE_FORWARD_LED_PIN,HIGH);
       if (lastState == 3) rotateRight(ROTATION_SPEED);
       else moveForward();
       lastState = 1;
     }else if (d.front>200 && d.rear<150){
-      digitalWrite(ROTATE_LEFT_LED_PIN,LOW);
-      digitalWrite(TURN_RIGHT_LED_PIN,HIGH);
-      digitalWrite(MOVE_FORWARD_LED_PIN,LOW);
       turnRight(300);
       lastState = 2;
     }else{
-      digitalWrite(ROTATE_LEFT_LED_PIN,HIGH);
-      digitalWrite(TURN_RIGHT_LED_PIN,HIGH);
-      digitalWrite(MOVE_FORWARD_LED_PIN,HIGH);
       moveForwardWithFeedback(error, emergencyFlagFeedback, error-previousError);
       lastState = 3;
     }
