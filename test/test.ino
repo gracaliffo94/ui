@@ -3,11 +3,19 @@
 // address we will assign if dual sensor is present
 #define LOX1_ADDRESS 0x30
 #define LOX2_ADDRESS 0x31
-#define A1 A1
 
 // set the pins to shutdown
 #define SHT_LOX1 2
 #define SHT_LOX2 4
+
+int number_lights_seen = 0;
+
+int number_light_1 = 100;// da modificare quando inizia la gara
+int number_light_2 = 100;
+int number_light_3 = 100;
+int number_light_4 = 100;
+int number_light_5 = 100;
+int number_light_6 = 100;
 
 
 #define LASERS_DISTANCE 0.118
@@ -16,8 +24,9 @@
 #define MOTOR_DX_IN2 6
 #define MOTOR_SX_IN1 9
 #define MOTOR_SX_IN2 10
-//#define FRONT_RIGHT_LED_PIN 12
-#define FRONT_LEFT_LED_PIN 13
+#define RIGHT_LED_PIN 13
+#define FRONT_LEFT_LED_PIN A0
+#define LEFT_LED_PIN A1
 #define ON_RIGHT_WALL_DISTANCE 0.125
 #define KP 0.37
 #define KD 4
@@ -35,7 +44,7 @@
 #define STATE_LIGHT_FOUND_LED_PIN 11
 #define A0 A0
 #define LIGHT_SENSOR_1 12
-#define IGNORE_TIME_AFTER_LIGHT_FOUND 1000
+#define IGNORE_TIME_AFTER_LIGHT_FOUND 1700
 
 struct Distance {
     short int front;
@@ -169,11 +178,10 @@ void setup() {
   pinMode(MOTOR_SX_IN1, OUTPUT);
   pinMode(MOTOR_SX_IN2, OUTPUT);
   pinMode(FRONT_LEFT_LED_PIN, INPUT);
+  pinMode(RIGHT_LED_PIN, INPUT);
   pinMode(LIGHT_SENSOR_1,INPUT);
   pinMode(LIGHT_SENSOR_2,INPUT);
-  pinMode(A1, INPUT);
-  //pinMode(FRONT_RIGHT_LED_PIN, INPUT);
-  
+  pinMode(LEFT_LED_PIN, INPUT);  
  
 }
 
@@ -212,7 +220,7 @@ void moveForward(){
   Serial.print(RIGHT_BASE_SPEED);
   Serial.print(" L_PWM:");
   Serial.println(LEFT_BASE_SPEED);
-  analogWrite(MOTOR_DX_IN1, RIGHT_BASE_SPEED);
+  analogWrite(MOTOR_DX_IN1, RIGHT_BASE_SPEED + 10);
   analogWrite(MOTOR_DX_IN2, 0);
   analogWrite(MOTOR_SX_IN1, LEFT_BASE_SPEED);
   analogWrite(MOTOR_SX_IN2, 0);
@@ -228,10 +236,10 @@ bool checkLight(){
 bool checkFrontObstacle(){
   if (frontDistance()<FRONT_CM_DISTANCE_OBSTACLE_AVOIDANCE_THRESHOLD)
     return true;
-  bool left_obstacle = 1-digitalRead(FRONT_LEFT_LED_PIN);
-  bool right_obstacle = 1-digitalRead(A1);
- //bool right_obstacle = 1-digitalRead(FRONT_RIGHT_LED_PIN);
-  return left_obstacle || right_obstacle;// || right_obstacle;
+  bool front_left_obstacle = 1-digitalRead(FRONT_LEFT_LED_PIN);
+  bool right_obstacle = 1-digitalRead(RIGHT_LED_PIN);
+  bool left_obstacle = 1-digitalRead(LEFT_LED_PIN);
+  return left_obstacle || right_obstacle || front_left_obstacle;
 }
 
 void rotateLeft(short int speed){
@@ -252,19 +260,19 @@ void rotateRight(short int speed){
 void rotate90CW(){
   // Ruota in senso orario
   analogWrite(MOTOR_DX_IN1, 0);
-  analogWrite(MOTOR_DX_IN2, 148);
-  analogWrite(MOTOR_SX_IN1, 120);
+  analogWrite(MOTOR_DX_IN2, 168);
+  analogWrite(MOTOR_SX_IN1, 140);
   analogWrite(MOTOR_SX_IN2, 0);
-  delay(150);
+  delay(600);
 }
 
 void rotate90CCW(){
-  // Ruota in senso orario
-  analogWrite(MOTOR_DX_IN1, 148);
+  // Ruota in senso antiorario
+  analogWrite(MOTOR_DX_IN1, 168);
   analogWrite(MOTOR_DX_IN2, 0);
   analogWrite(MOTOR_SX_IN1, 0);
-  analogWrite(MOTOR_SX_IN2, 120);
-  delay(300);
+  analogWrite(MOTOR_SX_IN2, 140);
+  delay(600);
 }
 
 void turnRight(int motionTime){
@@ -307,10 +315,43 @@ void searchForWall(Distance d, short int diff){
 void greenLedThreeSecondsBlocking(){
   digitalWrite(STATE_LIGHT_FOUND_LED_PIN,HIGH);
   delay(3000);
+  number_lights_seen = number_lights_seen + 1;
   digitalWrite(STATE_LIGHT_FOUND_LED_PIN,LOW);
 }
 
 void loop() {
+  /*
+  if (number_lights_seen == number_light_1){
+    rotate90CCW();
+    number_lights_seen = 0;
+    number_light_1 = 100;
+  }
+  if (number_lights_seen == number_light_2){
+    rotate90CCW();
+    number_lights_seen = 0;
+    number_light_2 = 100;
+  }
+  if (number_lights_seen == number_light_3){
+    rotate90CCW();
+    number_lights_seen = 0;
+    number_light_3 = 100;
+  }
+  if (number_lights_seen == number_light_4){
+    rotate90CCW();
+    number_lights_seen = 0;
+    number_light_4 = 100;
+  }
+  if (number_lights_seen == number_light_5){
+    rotate90CCW();
+    number_lights_seen = 0;
+    number_light_5 = 100;
+  }
+  if (number_lights_seen == number_light_6){
+    rotate90CCW();
+    number_lights_seen = 0;
+    number_light_6 = 100;
+  }
+  */
 
   Distance d = read_dual_sensors();
   short int error = d.rear-d.front;
