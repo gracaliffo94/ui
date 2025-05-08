@@ -3,6 +3,7 @@
 // address we will assign if dual sensor is present
 #define LOX1_ADDRESS 0x30
 #define LOX2_ADDRESS 0x31
+#define A1 A1
 
 // set the pins to shutdown
 #define SHT_LOX1 2
@@ -32,7 +33,7 @@
 
 #define LIGHT_SENSOR_2 3
 #define STATE_LIGHT_FOUND_LED_PIN 11
-
+#define A0 A0
 #define LIGHT_SENSOR_1 12
 #define IGNORE_TIME_AFTER_LIGHT_FOUND 1000
 
@@ -170,6 +171,7 @@ void setup() {
   pinMode(FRONT_LEFT_LED_PIN, INPUT);
   pinMode(LIGHT_SENSOR_1,INPUT);
   pinMode(LIGHT_SENSOR_2,INPUT);
+  pinMode(A1, INPUT);
   //pinMode(FRONT_RIGHT_LED_PIN, INPUT);
   
  
@@ -227,8 +229,9 @@ bool checkFrontObstacle(){
   if (frontDistance()<FRONT_CM_DISTANCE_OBSTACLE_AVOIDANCE_THRESHOLD)
     return true;
   bool left_obstacle = 1-digitalRead(FRONT_LEFT_LED_PIN);
-  //bool right_obstacle = 1-digitalRead(FRONT_RIGHT_LED_PIN);
-  return left_obstacle;// || right_obstacle;
+  bool right_obstacle = 1-digitalRead(A1);
+ //bool right_obstacle = 1-digitalRead(FRONT_RIGHT_LED_PIN);
+  return left_obstacle || right_obstacle;// || right_obstacle;
 }
 
 void rotateLeft(short int speed){
