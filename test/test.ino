@@ -20,7 +20,7 @@
 #define ON_RIGHT_WALL_DISTANCE 0.125
 #define KP 0.37
 #define KD 4
-#define RIGHT_BASE_SPEED 155
+#define RIGHT_BASE_SPEED 165
 #define LEFT_BASE_SPEED RIGHT_BASE_SPEED-30
 #define ROTATION_SPEED 150
 #define MAX_TURN_SPEED 150
@@ -55,6 +55,7 @@ bool first_light_not_found = true;
 short int lastState = 0;
 unsigned long lastTimeLightFound = millis();
 // objects for the vl53l0x
+bool notRotated = true;
 
 Adafruit_VL53L0X lox1 = Adafruit_VL53L0X();
 Adafruit_VL53L0X lox2 = Adafruit_VL53L0X();
@@ -253,6 +254,16 @@ void rotate90CW(){
   analogWrite(MOTOR_SX_IN2, 0);
   delay(150);
 }
+
+void rotate90CCW(){
+  // Ruota in senso orario
+  analogWrite(MOTOR_DX_IN1, 148);
+  analogWrite(MOTOR_DX_IN2, 0);
+  analogWrite(MOTOR_SX_IN1, 0);
+  analogWrite(MOTOR_SX_IN2, 120);
+  delay(300);
+}
+
 void turnRight(int motionTime){
   // Ruota in senso orario
   analogWrite(MOTOR_DX_IN1, 0);
@@ -301,6 +312,10 @@ void loop() {
   Distance d = read_dual_sensors();
   short int error = d.rear-d.front;
 
+  if (millis()>60000 && notRotated){
+    notRotated = false;
+    rotate90CCW();
+  }
   //if (!wallFound){
   //  searchForWall(d,error);
   //}else{
