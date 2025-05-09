@@ -17,6 +17,8 @@ int number_light_4 = 100;
 int number_light_5 = 100;
 int number_light_6 = 100;
 
+int time_number_light;
+bool daly_rotate = false;
 
 #define LASERS_DISTANCE 0.118
  
@@ -325,37 +327,52 @@ void loop() {
     number_lights_seen = 0;
     number_light_1 = 100;
     number_light_2 = 100;// Da modificare
+//time_number_light = millis() + 1700; //se levo quegli // devo aggiungerli al rotate
+//daly_rotate = true;
   }
   if (number_lights_seen == number_light_2){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_2 = 100;
     number_light_3 = 100;// Da modificare
+//time_number_light = millis() + 1700;
+//daly_rotate = true;
+
   }
   if (number_lights_seen == number_light_3){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_3 = 100;
     number_light_4 = 100;// Da modificare
+//time_number_light = millis() + 1700;
+//daly_rotate = true;
   }
   if (number_lights_seen == number_light_4){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_4 = 100;
     number_light_5 = 100;// Da modificare
+//time_number_light = millis() + 1700;
+//daly_rotate = true;
   }
   if (number_lights_seen == number_light_5){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_5 = 100;
     number_light_6 = 100;// Da modificare
+//time_number_light = millis() + 1700;
+//daly_rotate = true;
   }
   if (number_lights_seen == number_light_6){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_6 = 100;
+//time_number_light = millis() + 1700;
+//daly_rotate = true;
   }
-
+if (daly_rotate == true && time_number_light <= millis()){
+    rotate90CCW();
+}
   Distance d = read_dual_sensors();
   short int error = d.rear-d.front;
 
