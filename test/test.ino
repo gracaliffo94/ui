@@ -320,38 +320,41 @@ void greenLedThreeSecondsBlocking(){
 }
 
 void loop() {
-  /*
   if (number_lights_seen == number_light_1){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_1 = 100;
+    number_light_2 = 100;// Da modificare
   }
   if (number_lights_seen == number_light_2){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_2 = 100;
+    number_light_3 = 100;// Da modificare
   }
   if (number_lights_seen == number_light_3){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_3 = 100;
+    number_light_4 = 100;// Da modificare
   }
   if (number_lights_seen == number_light_4){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_4 = 100;
+    number_light_5 = 100;// Da modificare
   }
   if (number_lights_seen == number_light_5){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_5 = 100;
+    number_light_6 = 100;// Da modificare
   }
   if (number_lights_seen == number_light_6){
     rotate90CCW();
     number_lights_seen = 0;
     number_light_6 = 100;
   }
-  */
 
   Distance d = read_dual_sensors();
   short int error = d.rear-d.front;
